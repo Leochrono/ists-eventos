@@ -1,0 +1,13 @@
+﻿  Future<void> _seleccionarFecha() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _fechaSeleccionada,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+    if (picked != null && picked != _fechaSeleccionada) {
+      setState(() {
+        _fechaSeleccionada = picked;
+      });
+    }
+  }
