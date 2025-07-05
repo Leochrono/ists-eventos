@@ -2,6 +2,8 @@
 import 'package:intl/intl.dart';
 import '../models/evento.dart';
 import '../services/database_service.dart';
+import 'form_validators.dart';
+import 'date_time_picker_widgets.dart';
 
 class CrearEventoScreen extends StatefulWidget {
   final Evento? evento;
@@ -63,6 +65,8 @@ class _CrearEventoScreenState extends State<CrearEventoScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Editar Evento' : 'Crear Evento'),
+        backgroundColor: const Color(0xFF2E7D32),
+        foregroundColor: Colors.white,
         actions: [
           if (_isLoading)
             const Center(
@@ -85,56 +89,106 @@ class _CrearEventoScreenState extends State<CrearEventoScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2E7D32),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.school,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Instituto Superior Tecnológico Sudamericano',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                'Sistema de Gestión de Eventos',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+            _buildInstitutionHeader(),
+            const SizedBox(height: 24),
+            _buildBasicInfoSection(),
+            const SizedBox(height: 24),
+            _buildDateTimeSection(),
+            const SizedBox(height: 24),
+            _buildAdditionalInfoSection(),
+            const SizedBox(height: 32),
+            _buildQRInfoCard(),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _buildBottomActions(),
+    );
+  }
+
+  Widget _buildInstitutionHeader() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2E7D32), Color(0xFF4CAF50)],
                 ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2E7D32).withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.school,
+                color: Colors.white,
+                size: 24,
               ),
             ),
-            
-            const SizedBox(height: 24),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Instituto Superior Tecnológico Sudamericano',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2E7D32),
+                    ),
+                  ),
+                  Text(
+                    'Sistema de Gestión de Eventos',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBasicInfoSection() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: const Color(0xFF2E7D32),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Información Básica',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2E7D32),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
             
             TextFormField(
               controller: _nombreController,
@@ -142,19 +196,13 @@ class _CrearEventoScreenState extends State<CrearEventoScreen> {
                 labelText: 'Nombre del Evento *',
                 hintText: 'Ej: Conferencia de Tecnología 2025',
                 prefixIcon: Icon(Icons.event),
+                helperText: 'Especifica el tipo de evento (conferencia, taller, etc.)',
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'El nombre del evento es obligatorio';
-                }
-                if (value.trim().length < 3) {
-                  return 'El nombre debe tener al menos 3 caracteres';
-                }
-                return null;
-              },
+              validator: FormValidators.validateEventName,
+              textCapitalization: TextCapitalization.words,
             ),
             
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             
             TextFormField(
               controller: _descripcionController,
@@ -162,58 +210,201 @@ class _CrearEventoScreenState extends State<CrearEventoScreen> {
                 labelText: 'Descripción *',
                 hintText: 'Describe el evento, actividades, objetivos...',
                 prefixIcon: Icon(Icons.description),
+                helperText: 'Incluye detalles importantes para los participantes',
               ),
               maxLines: 3,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'La descripción es obligatoria';
-                }
-                if (value.trim().length < 10) {
-                  return 'La descripción debe ser más detallada';
-                }
-                return null;
-              },
+              validator: FormValidators.validateDescription,
+              textCapitalization: TextCapitalization.sentences,
             ),
-            
-            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateTimeSection() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.schedule,
+                  color: const Color(0xFF2E7D32),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Fecha y Hora',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2E7D32),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
             
             Row(
               children: [
                 Expanded(
-                  child: InkWell(
+                  child: DateDisplayCard(
+                    selectedDate: _fechaSeleccionada,
                     onTap: _seleccionarFecha,
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Fecha *',
-                        prefixIcon: Icon(Icons.calendar_today),
-                      ),
-                      child: Text(
-                        DateFormat('dd/MM/yyyy').format(_fechaSeleccionada),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: InkWell(
+                  child: TimeDisplayCard(
+                    selectedTime: _horaSeleccionada,
                     onTap: _seleccionarHora,
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Hora *',
-                        prefixIcon: Icon(Icons.access_time),
-                      ),
-                      child: Text(
-                        _horaSeleccionada.format(context),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ),
                   ),
                 ),
               ],
             ),
             
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            
+            // Mostrar validaciones de fecha y hora
+            _buildDateTimeValidations(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateTimeValidations() {
+    final dateError = FormValidators.validateEventDate(_fechaSeleccionada);
+    final timeError = FormValidators.validateInstitutionalTime(_horaSeleccionada);
+    
+    if (dateError == null && timeError == null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.green.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.check_circle,
+              color: Colors.green[700],
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Fecha y hora válidas para el evento',
+                style: TextStyle(
+                  color: Colors.green[700],
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return Column(
+      children: [
+        if (dateError != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.error,
+                  color: Colors.red[700],
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    dateError,
+                    style: TextStyle(
+                      color: Colors.red[700],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (timeError != null)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.schedule,
+                  color: Colors.orange[700],
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    timeError,
+                    style: TextStyle(
+                      color: Colors.orange[700],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAdditionalInfoSection() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.settings,
+                  color: const Color(0xFF2E7D32),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Detalles Adicionales',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2E7D32),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
             
             TextFormField(
               controller: _ubicacionController,
@@ -221,16 +412,13 @@ class _CrearEventoScreenState extends State<CrearEventoScreen> {
                 labelText: 'Ubicación *',
                 hintText: 'Ej: Auditorio Principal, Aula 201, Campus ISTS',
                 prefixIcon: Icon(Icons.location_on),
+                helperText: 'Especifica el lugar exacto del evento',
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'La ubicación es obligatoria';
-                }
-                return null;
-              },
+              validator: FormValidators.validateLocation,
+              textCapitalization: TextCapitalization.words,
             ),
             
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             
             TextFormField(
               controller: _organizadorController,
@@ -238,16 +426,13 @@ class _CrearEventoScreenState extends State<CrearEventoScreen> {
                 labelText: 'Organizador *',
                 hintText: 'Nombre del responsable o departamento',
                 prefixIcon: Icon(Icons.person),
+                helperText: 'Persona o área responsable del evento',
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'El organizador es obligatorio';
-                }
-                return null;
-              },
+              validator: FormValidators.validateOrganizer,
+              textCapitalization: TextCapitalization.words,
             ),
             
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             
             TextFormField(
               controller: _capacidadController,
@@ -256,136 +441,202 @@ class _CrearEventoScreenState extends State<CrearEventoScreen> {
                 hintText: 'Número máximo de participantes',
                 prefixIcon: Icon(Icons.people),
                 suffixText: 'personas',
+                helperText: 'Considera el espacio disponible',
               ),
               keyboardType: TextInputType.number,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'La capacidad es obligatoria';
-                }
-                final capacidad = int.tryParse(value);
-                if (capacidad == null || capacidad <= 0) {
-                  return 'Ingresa un número válido mayor a 0';
-                }
-                if (capacidad > 10000) {
-                  return 'La capacidad no puede exceder 10,000 personas';
-                }
-                return null;
-              },
-            ),
-            
-            const SizedBox(height: 32),
-            
-            Card(
-              color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          color: const Color(0xFF2E7D32),
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Información del QR',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF2E7D32),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      ' Se generará automáticamente un código QR único para este evento\n'
-                      ' El QR contendrá toda la información del evento\n'
-                      ' Podrás descargarlo y compartirlo después de crear el evento\n'
-                      ' Los participantes podrán escanearlo para obtener los detalles',
-                      style: TextStyle(fontSize: 12, color: Colors.black87),
-                    ),
-                  ],
-                ),
+              validator: (value) => FormValidators.validateCapacityByEventType(
+                value, 
+                _nombreController.text,
               ),
             ),
           ],
         ),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
+    );
+  }
+
+  Widget _buildQRInfoCard() {
+    return Card(
+      color: const Color(0xFF2E7D32).withValues(alpha: 0.05),
+      elevation: 1,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2E7D32),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.qr_code,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Código QR Automático',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2E7D32),
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '✓ Se generará automáticamente un código QR único\n'
+              '✓ Contiene toda la información del evento\n'
+              '✓ Compatible con cualquier aplicación de QR\n'
+              '✓ Los participantes pueden registrarse escaneándolo',
+              style: TextStyle(fontSize: 13, height: 1.4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomActions() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withValues(alpha: 0.2),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _guardarEvento,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white, // TEXTO EN BLANCO
+                disabledBackgroundColor: Colors.grey[400],
+                disabledForegroundColor: Colors.white, // TEXTO BLANCO CUANDO ESTÁ DESHABILITADO
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 4,
+              ),
+              child: _isLoading
+                  ? const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Guardando...',
+                          style: TextStyle(
+                            color: Colors.white, // TEXTO BLANCO EXPLÍCITO
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      _isEditing ? 'Actualizar Evento' : 'Crear Evento',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white, // TEXTO BLANCO EXPLÍCITO
+                      ),
+                    ),
+            ),
+          ),
+          if (_isEditing) ...[
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _guardarEvento,
-                child: Padding(
+              child: TextButton(
+                onPressed: _isLoading ? null : _eliminarEvento,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    _isEditing ? 'Actualizar Evento' : 'Crear Evento',
-                    style: const TextStyle(fontSize: 16),
-                  ),
+                ),
+                child: const Text(
+                  'Eliminar Evento',
+                  style: TextStyle(fontSize: 16),
                 ),
               ),
             ),
-            if (_isEditing) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: _isLoading ? null : _eliminarEvento,
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.red,
-                  ),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      'Eliminar Evento',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }
 
   Future<void> _seleccionarFecha() async {
-    final DateTime? picked = await showDatePicker(
+    final selectedDate = await DateTimePickerWidgets.showCustomDatePicker(
       context: context,
       initialDate: _fechaSeleccionada,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-      locale: const Locale('es', 'ES'),
+      helpText: 'Fecha del Evento',
     );
-    if (picked != null && picked != _fechaSeleccionada) {
+    
+    if (selectedDate != null) {
       setState(() {
-        _fechaSeleccionada = picked;
+        _fechaSeleccionada = selectedDate;
       });
     }
   }
 
   Future<void> _seleccionarHora() async {
-    final TimeOfDay? picked = await showTimePicker(
+    final selectedTime = await DateTimePickerWidgets.showCustomTimePicker(
       context: context,
       initialTime: _horaSeleccionada,
+      helpText: 'Hora del Evento',
     );
-    if (picked != null && picked != _horaSeleccionada) {
+    
+    if (selectedTime != null) {
       setState(() {
-        _horaSeleccionada = picked;
+        _horaSeleccionada = selectedTime;
       });
     }
   }
 
   Future<void> _guardarEvento() async {
     if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, corrige los errores en el formulario'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Validar fecha y hora
+    final dateTimeError = FormValidators.validateDateTime(_fechaSeleccionada, _horaSeleccionada);
+    if (dateTimeError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(dateTimeError),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
@@ -399,10 +650,6 @@ class _CrearEventoScreenState extends State<CrearEventoScreen> {
         _horaSeleccionada.hour,
         _horaSeleccionada.minute,
       );
-
-      if (fechaCompleta.isBefore(DateTime.now())) {
-        throw Exception('La fecha y hora del evento no puede ser en el pasado');
-      }
 
       final evento = Evento(
         id: widget.evento?.id,
@@ -458,7 +705,13 @@ class _CrearEventoScreenState extends State<CrearEventoScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Confirmar eliminación'),
+          title: const Row(
+            children: [
+              Icon(Icons.warning, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Confirmar eliminación'),
+            ],
+          ),
           content: const Text(
             '¿Estás seguro de que deseas eliminar este evento? Esta acción no se puede deshacer.',
           ),
@@ -517,4 +770,3 @@ class _CrearEventoScreenState extends State<CrearEventoScreen> {
     super.dispose();
   }
 }
-

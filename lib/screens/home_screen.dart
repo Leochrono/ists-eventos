@@ -53,7 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _eventosFiltrados = _eventos
             .where((evento) =>
                 evento.nombre.toLowerCase().contains(query.toLowerCase()) ||
-                evento.descripcion.toLowerCase().contains(query.toLowerCase()) ||
+                evento.descripcion
+                    .toLowerCase()
+                    .contains(query.toLowerCase()) ||
                 evento.organizador.toLowerCase().contains(query.toLowerCase()))
             .toList();
       }
@@ -128,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          
           Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
@@ -141,7 +142,6 @@ class _HomeScreenState extends State<HomeScreen> {
               onChanged: _filtrarEventos,
             ),
           ),
-
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -204,9 +204,19 @@ class _HomeScreenState extends State<HomeScreen> {
             _loadEventos();
           }
         },
-        icon: const Icon(Icons.add),
-        label: const Text('Crear Evento'),
         backgroundColor: const Color(0xFF2E7D32),
+        foregroundColor: Colors.white,
+        icon: const Icon(
+          Icons.add,
+          color: Colors.white,
+        ),
+        label: const Text(
+          'Crear Evento',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
     );
   }
