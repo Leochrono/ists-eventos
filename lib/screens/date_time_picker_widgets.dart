@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 /// Widgets personalizados para selección de fecha y hora con tema ISTS
@@ -45,7 +45,6 @@ class DateTimePickerWidgets {
       fieldHintText: 'dd/mm/yyyy',
       errorFormatText: 'Formato de fecha inválido',
       errorInvalidText: 'Fecha fuera del rango permitido',
-      locale: const Locale('es', 'ES'), // AGREGAR ESTA LÍNEA
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -118,17 +117,15 @@ class DateTimePickerWidgets {
             data: Theme.of(context).copyWith(
               timePickerTheme: TimePickerThemeData(
                 backgroundColor: Colors.white,
-                hourMinuteTextColor:
-                    Colors.white, // Texto blanco en cuadros seleccionados
+                hourMinuteTextColor: Colors.white,
                 dayPeriodTextColor: _primaryColor,
                 dialHandColor: _primaryColor,
                 dialTextColor: WidgetStateColor.resolveWith((states) {
                   if (states.contains(WidgetState.selected)) {
-                    return Colors
-                        .white; // TEXTO BLANCO cuando tiene fondo verde
+                    return Colors.white;
                   }
-                  return _primaryColor; // TEXTO VERDE cuando no está seleccionado
-                }), // NÚMEROS DEL RELOJ EN VERDE
+                  return _primaryColor;
+                }),
                 entryModeIconColor: _primaryColor,
                 helpTextStyle: const TextStyle(
                   color: _primaryColor,
@@ -144,10 +141,8 @@ class DateTimePickerWidgets {
                   fontWeight: FontWeight.bold,
                   fontSize: 32,
                 ),
-                // ARREGLAR EL RELOJ CON ESTAS PROPIEDADES
                 dialBackgroundColor: Colors.grey[50],
-                hourMinuteColor:
-                    _primaryColor, // CAMBIADO: Solo el color, sin WidgetStateProperty
+                hourMinuteColor: _primaryColor,
               ),
               colorScheme: const ColorScheme.light(
                 primary: _primaryColor,

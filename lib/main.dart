@@ -1,27 +1,22 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
-import 'services/database_service.dart';
+import 'services/api_service.dart';
 import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  final databaseService = DatabaseService();
+  // Inicializar el servicio API
+  final apiService = ApiService();
   
-  if (!kIsWeb) {
-
-    await databaseService.initDatabase();
-  } else {
-
-    await databaseService.cargarDatosPrueba();
-  }
-  
-  runApp(const ISTSEventosApp());
+  runApp(ISTSEventosApp(apiService: apiService));
 }
 
 class ISTSEventosApp extends StatelessWidget {
-  const ISTSEventosApp({super.key});
+  final ApiService apiService;
+  
+  const ISTSEventosApp({super.key, required this.apiService});
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +72,10 @@ class ISTSEventosApp extends StatelessWidget {
           fillColor: Colors.grey[50],
         ),
       ),
-      home: const HomeScreen(),
+      // Comenzar con pantalla de login
+      home: const LoginScreen(),
+      // Para desarrollo, puedes usar directamente HomeScreen
+      // home: const HomeScreen(),
     );
   }
 }

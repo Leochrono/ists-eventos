@@ -1,402 +1,349 @@
-﻿import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:path/path.dart';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
+﻿// lib/services/database_service.dart
 import '../models/evento.dart';
 import '../models/usuario.dart';
 import '../models/asistencia.dart';
+import 'api_service.dart';
+import 'api_exception.dart';
 
+/// Servicio de base de datos que ahora actúa como wrapper del ApiService
+/// Mantiene la misma interfaz para compatibilidad con el código existente
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   factory DatabaseService() => _instance;
   DatabaseService._internal();
 
-  Database? _database;
+  final ApiService _apiService = ApiService();
+  bool _useOfflineMode = false;
+
+  // Datos offline de respaldo
+  final List<Evento> _eventosOffline = [];
+  final List<Usuario> _usuariosOffline = [];
+
+  // ============================================================================
+  // EVENTOS
+  // ============================================================================
   
-  final List<Evento> _eventosMemoria = [];
-  final List<Usuario> _usuariosMemoria = [];
-  final List<Asistencia> _asistenciasMemoria = [];
-  int _nextEventoId = 1;
-  int _nextUsuarioId = 1;
-  int _nextAsistenciaId = 1;
-
-  Future<Database?> get database async {
-    if (kIsWeb) {
-      return null;
-    }
-    
-    if (_database != null) return _database!;
-    _database = await initDatabase();
-    return _database!;
-  }
-
-  Future<Database> initDatabase() async {
-    if (kIsWeb) {
-      throw UnsupportedError('Database not supported on web');
-    }
-    
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
-    }
-    
-    String path = join(await getDatabasesPath(), 'ists_eventos.db');
-    
-    return await openDatabase(
-      path,
-      version: 2,
-      onCreate: (db, version) async {
-        await db.execute(
-          '''CREATE TABLE eventos(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT NOT NULL,
-            descripcion TEXT NOT NULL,
-            fecha INTEGER NOT NULL,
-            ubicacion TEXT NOT NULL,
-            organizador TEXT NOT NULL,
-            capacidad_maxima INTEGER NOT NULL,
-            imagen_url TEXT,
-            fecha_creacion INTEGER NOT NULL,
-            activo INTEGER NOT NULL DEFAULT 1
-          )''',
-        );
-        
-        await db.execute(
-          '''CREATE TABLE usuarios(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cedula TEXT NOT NULL UNIQUE,
-            nombres TEXT NOT NULL,
-            apellidos TEXT NOT NULL,
-            email TEXT NOT NULL,
-            telefono TEXT NOT NULL,
-            tipo_usuario INTEGER NOT NULL,
-            fecha_registro INTEGER NOT NULL,
-            carrera TEXT,
-            ciclo TEXT,
-            departamento TEXT,
-            cargo TEXT,
-            institucion TEXT,
-            motivo TEXT
-          )''',
-        );
-        
-        await db.execute(
-          '''CREATE TABLE asistencia(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            evento_id INTEGER NOT NULL,
-            usuario_id INTEGER NOT NULL,
-            fecha_registro INTEGER NOT NULL,
-            presente INTEGER NOT NULL DEFAULT 1,
-            observaciones TEXT,
-            FOREIGN KEY (evento_id) REFERENCES eventos (id),
-            FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
-            UNIQUE(evento_id, usuario_id)
-          )''',
-        );
-      },
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          await db.execute(
-            '''CREATE TABLE IF NOT EXISTS usuarios(
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              cedula TEXT NOT NULL UNIQUE,
-              nombres TEXT NOT NULL,
-              apellidos TEXT NOT NULL,
-              email TEXT NOT NULL,
-              telefono TEXT NOT NULL,
-              tipo_usuario INTEGER NOT NULL,
-              fecha_registro INTEGER NOT NULL,
-              carrera TEXT,
-              ciclo TEXT,
-              departamento TEXT,
-              cargo TEXT,
-              institucion TEXT,
-              motivo TEXT
-            )''',
-          );
-          
-          await db.execute(
-            '''CREATE TABLE IF NOT EXISTS asistencia(
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              evento_id INTEGER NOT NULL,
-              usuario_id INTEGER NOT NULL,
-              fecha_registro INTEGER NOT NULL,
-              presente INTEGER NOT NULL DEFAULT 1,
-              observaciones TEXT,
-              FOREIGN KEY (evento_id) REFERENCES eventos (id),
-              FOREIGN KEY (usuario_id) REFERENCES usuarios (id),
-              UNIQUE(evento_id, usuario_id)
-            )''',
-          );
-        }
-      },
-    );
-  }
-
   Future<int> insertEvento(Evento evento) async {
-    if (kIsWeb) {
-      final nuevoEvento = evento.copyWith(id: _nextEventoId++);
-      _eventosMemoria.add(nuevoEvento);
+    try {
+      if (_useOfflineMode) {
+        final nuevoEvento = evento.copyWith(id: _eventosOffline.length + 1);
+        _eventosOffline.add(nuevoEvento);
+        return nuevoEvento.id!;
+      }
+      
+      final eventoCreado = await _apiService.createEvento(evento);
+      return eventoCreado.id ?? 0;
+    } catch (e) {
+      // Fallback a modo offline
+      _useOfflineMode = true;
+      final nuevoEvento = evento.copyWith(id: _eventosOffline.length + 1);
+      _eventosOffline.add(nuevoEvento);
       return nuevoEvento.id!;
     }
-    
-    final db = await database;
-    return await db!.insert('eventos', evento.toMap());
   }
 
   Future<List<Evento>> getEventos() async {
-    if (kIsWeb) {
-      return _eventosMemoria.where((e) => e.activo).toList()
-        ..sort((a, b) => b.fecha.compareTo(a.fecha));
+    try {
+      if (_useOfflineMode) {
+        return _eventosOffline;
+      }
+      
+      return await _apiService.getEventos();
+    } catch (e) {
+      _useOfflineMode = true;
+      return _eventosOffline;
     }
-    
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db!.query(
-      'eventos',
-      where: 'activo = ?',
-      whereArgs: [1],
-      orderBy: 'fecha DESC',
-    );
-
-    return List.generate(maps.length, (i) {
-      return Evento.fromMap(maps[i]);
-    });
   }
 
   Future<Evento?> getEvento(int id) async {
-    if (kIsWeb) {
+    try {
+      if (_useOfflineMode) {
+        try {
+          return _eventosOffline.firstWhere((e) => e.id == id);
+        } catch (e) {
+          return null;
+        }
+      }
+      
+      return await _apiService.getEvento(id);
+    } catch (e) {
+      _useOfflineMode = true;
       try {
-        return _eventosMemoria.firstWhere((e) => e.id == id && e.activo);
+        return _eventosOffline.firstWhere((e) => e.id == id);
       } catch (e) {
         return null;
       }
     }
-    
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db!.query(
-      'eventos',
-      where: 'id = ? AND activo = ?',
-      whereArgs: [id, 1],
-    );
-
-    if (maps.isNotEmpty) {
-      return Evento.fromMap(maps.first);
-    }
-    return null;
   }
 
   Future<int> updateEvento(Evento evento) async {
-    if (kIsWeb) {
-      final index = _eventosMemoria.indexWhere((e) => e.id == evento.id);
+    try {
+      if (_useOfflineMode) {
+        final index = _eventosOffline.indexWhere((e) => e.id == evento.id);
+        if (index != -1) {
+          _eventosOffline[index] = evento;
+          return 1;
+        }
+        return 0;
+      }
+      
+      await _apiService.updateEvento(evento);
+      return 1;
+    } catch (e) {
+      _useOfflineMode = true;
+      final index = _eventosOffline.indexWhere((e) => e.id == evento.id);
       if (index != -1) {
-        _eventosMemoria[index] = evento;
+        _eventosOffline[index] = evento;
         return 1;
       }
       return 0;
     }
-    
-    final db = await database;
-    return await db!.update(
-      'eventos',
-      evento.toMap(),
-      where: 'id = ?',
-      whereArgs: [evento.id],
-    );
   }
 
   Future<int> deleteEvento(int id) async {
-    if (kIsWeb) {
-      final index = _eventosMemoria.indexWhere((e) => e.id == id);
-      if (index != -1) {
-        _eventosMemoria[index] = _eventosMemoria[index].copyWith(activo: false);
+    try {
+      if (_useOfflineMode) {
+        _eventosOffline.removeWhere((e) => e.id == id);
         return 1;
       }
-      return 0;
+      
+      await _apiService.deleteEvento(id);
+      return 1;
+    } catch (e) {
+      _useOfflineMode = true;
+      _eventosOffline.removeWhere((e) => e.id == id);
+      return 1;
     }
-    
-    final db = await database;
-    return await db!.update(
-      'eventos',
-      {'activo': 0},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
   }
 
   Future<List<Evento>> searchEventos(String query) async {
-    if (kIsWeb) {
-      return _eventosMemoria.where((evento) =>
-        evento.activo &&
-        (evento.nombre.toLowerCase().contains(query.toLowerCase()) ||
-         evento.descripcion.toLowerCase().contains(query.toLowerCase()) ||
-         evento.organizador.toLowerCase().contains(query.toLowerCase()))
-      ).toList()..sort((a, b) => b.fecha.compareTo(a.fecha));
+    try {
+      if (_useOfflineMode) {
+        return _eventosOffline.where((evento) =>
+          evento.nombre.toLowerCase().contains(query.toLowerCase()) ||
+          evento.descripcion.toLowerCase().contains(query.toLowerCase()) ||
+          evento.organizador.toLowerCase().contains(query.toLowerCase())
+        ).toList();
+      }
+      
+      return await _apiService.searchEventos(query);
+    } catch (e) {
+      _useOfflineMode = true;
+      return _eventosOffline.where((evento) =>
+        evento.nombre.toLowerCase().contains(query.toLowerCase()) ||
+        evento.descripcion.toLowerCase().contains(query.toLowerCase()) ||
+        evento.organizador.toLowerCase().contains(query.toLowerCase())
+      ).toList();
     }
-    
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db!.query(
-      'eventos',
-      where: 'activo = ? AND (nombre LIKE ? OR descripcion LIKE ? OR organizador LIKE ?)',
-      whereArgs: [1, '%$query%', '%$query%', '%$query%'],
-      orderBy: 'fecha DESC',
-    );
-
-    return List.generate(maps.length, (i) {
-      return Evento.fromMap(maps[i]);
-    });
   }
 
+  // ============================================================================
+  // USUARIOS
+  // ============================================================================
+  
   Future<int> insertUsuario(Usuario usuario) async {
-    if (kIsWeb) {
-      final nuevoUsuario = usuario.copyWith(id: _nextUsuarioId++);
-      _usuariosMemoria.add(nuevoUsuario);
+    try {
+      final nuevoUsuario = usuario.copyWith(id: _usuariosOffline.length + 1);
+      _usuariosOffline.add(nuevoUsuario);
       return nuevoUsuario.id!;
+    } catch (e) {
+      return 1;
     }
-    
-    final db = await database;
-    return await db!.insert('usuarios', usuario.toMap());
   }
 
   Future<Usuario?> getUsuarioPorCedula(String cedula) async {
-    if (kIsWeb) {
+    try {
+      if (_useOfflineMode) {
+        try {
+          return _usuariosOffline.firstWhere((u) => u.cedula == cedula);
+        } catch (e) {
+          return null;
+        }
+      }
+      
+      return await _apiService.getUsuarioPorCedula(cedula);
+    } catch (e) {
+      _useOfflineMode = true;
       try {
-        return _usuariosMemoria.firstWhere((u) => u.cedula == cedula);
+        return _usuariosOffline.firstWhere((u) => u.cedula == cedula);
       } catch (e) {
         return null;
       }
     }
-    
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db!.query(
-      'usuarios',
-      where: 'cedula = ?',
-      whereArgs: [cedula],
-    );
-
-    if (maps.isNotEmpty) {
-      return Usuario.fromMap(maps.first);
-    }
-    return null;
   }
 
   Future<List<Usuario>> getUsuarios() async {
-    if (kIsWeb) {
-      return List.from(_usuariosMemoria)
-        ..sort((a, b) => b.fechaRegistro.compareTo(a.fechaRegistro));
-    }
-    
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db!.query(
-      'usuarios',
-      orderBy: 'fecha_registro DESC',
-    );
-
-    return List.generate(maps.length, (i) {
-      return Usuario.fromMap(maps[i]);
-    });
+    return _usuariosOffline;
   }
 
   Future<int> updateUsuario(Usuario usuario) async {
-    if (kIsWeb) {
-      final index = _usuariosMemoria.indexWhere((u) => u.id == usuario.id);
-      if (index != -1) {
-        _usuariosMemoria[index] = usuario;
-        return 1;
-      }
-      return 0;
+    final index = _usuariosOffline.indexWhere((u) => u.id == usuario.id);
+    if (index != -1) {
+      _usuariosOffline[index] = usuario;
+      return 1;
     }
-    
-    final db = await database;
-    return await db!.update(
-      'usuarios',
-      usuario.toMap(),
-      where: 'id = ?',
-      whereArgs: [usuario.id],
-    );
+    return 0;
   }
 
+  // ============================================================================
+  // ASISTENCIA
+  // ============================================================================
+  
   Future<int> registrarAsistencia(Asistencia asistencia) async {
-    if (kIsWeb) {
-      final yaExiste = _asistenciasMemoria.any((a) => 
-        a.eventoId == asistencia.eventoId && a.usuarioId == asistencia.usuarioId);
-      
-      if (yaExiste) {
-        throw Exception('Usuario ya registrado en este evento');
+    try {
+      if (_useOfflineMode) {
+        return 1;
       }
       
-      final nuevaAsistencia = asistencia.copyWith(id: _nextAsistenciaId++);
-      _asistenciasMemoria.add(nuevaAsistencia);
-      return nuevaAsistencia.id!;
+      return await _apiService.registrarAsistencia(asistencia);
+    } catch (e) {
+      _useOfflineMode = true;
+      return 1;
     }
-    
-    final db = await database;
-    return await db!.insert(
-      'asistencia', 
-      asistencia.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
   }
 
   Future<bool> yaRegistradoEnEvento(int eventoId, int usuarioId) async {
-    if (kIsWeb) {
-      return _asistenciasMemoria.any((a) => 
-        a.eventoId == eventoId && a.usuarioId == usuarioId);
+    try {
+      if (_useOfflineMode) {
+        return false;
+      }
+      
+      return await _apiService.yaRegistradoEnEvento(eventoId, usuarioId);
+    } catch (e) {
+      _useOfflineMode = true;
+      return false;
     }
-    
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db!.query(
-      'asistencia',
-      where: 'evento_id = ? AND usuario_id = ?',
-      whereArgs: [eventoId, usuarioId],
-    );
-
-    return maps.isNotEmpty;
   }
 
   Future<List<Map<String, dynamic>>> getAsistenciaEvento(int eventoId) async {
-    if (kIsWeb) {
-      final asistenciasEvento = _asistenciasMemoria
-        .where((a) => a.eventoId == eventoId)
-        .toList();
+    try {
+      if (_useOfflineMode) {
+        return [];
+      }
       
-      return asistenciasEvento.map((asistencia) {
-        final usuario = _usuariosMemoria.firstWhere((u) => u.id == asistencia.usuarioId);
-        final map = usuario.toMap();
-        map['fecha_asistencia'] = asistencia.fechaRegistro.millisecondsSinceEpoch;
-        map['observaciones'] = asistencia.observaciones;
-        return map;
-      }).toList()..sort((a, b) => b['fecha_asistencia'].compareTo(a['fecha_asistencia']));
+      return await _apiService.getAsistenciaEvento(eventoId);
+    } catch (e) {
+      _useOfflineMode = true;
+      return [];
     }
-    
-    final db = await database;
-    return await db!.rawQuery('''
-      SELECT u.*, a.fecha_registro as fecha_asistencia, a.observaciones
-      FROM usuarios u
-      INNER JOIN asistencia a ON u.id = a.usuario_id
-      WHERE a.evento_id = ?
-      ORDER BY a.fecha_registro DESC
-    ''', [eventoId]);
   }
 
   Future<int> getCountAsistencia(int eventoId) async {
-    if (kIsWeb) {
-      return _asistenciasMemoria.where((a) => a.eventoId == eventoId).length;
+    try {
+      if (_useOfflineMode) {
+        return 0;
+      }
+      
+      return await _apiService.getCountAsistencia(eventoId);
+    } catch (e) {
+      _useOfflineMode = true;
+      return 0;
     }
-    
-    final db = await database;
-    final result = await db!.rawQuery(
-      'SELECT COUNT(*) as count FROM asistencia WHERE evento_id = ?',
-      [eventoId],
-    );
-    return result.first['count'] as int;
+  }
+
+  // ============================================================================
+  // MÉTODOS ESPECÍFICOS DE LA API
+  // ============================================================================
+  
+  Future<List<Map<String, dynamic>>> getCarreras() async {
+    try {
+      return await _apiService.getCarreras();
+    } catch (e) {
+      // Retornar carreras por defecto
+      return [
+        {'id': 1, 'nombre': 'Desarrollo de Software'},
+        {'id': 2, 'nombre': 'Administración'},
+        {'id': 3, 'nombre': 'Marketing'},
+        {'id': 4, 'nombre': 'Gastronomía'},
+        {'id': 5, 'nombre': 'Protección del Medio Ambiente'},
+      ];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getTiposEvento() async {
+    try {
+      return await _apiService.getTiposEvento();
+    } catch (e) {
+      return [
+        {'id': 1, 'nombre': 'Conferencia'},
+        {'id': 2, 'nombre': 'Taller'},
+        {'id': 3, 'nombre': 'Seminario'},
+      ];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getSecciones() async {
+    try {
+      return await _apiService.getSecciones();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> consultarUsuario(String cedula, String tipoUsuario) async {
+    try {
+      final usuario = await _apiService.consultarUsuario(cedula, tipoUsuario);
+      return usuario?.toJson();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<String?> registrarEnEvento(String usuarioId, int eventoId) async {
+    try {
+      await _apiService.registrarEvento(usuarioId, eventoId);
+      return 'success';
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<bool> seleccionarSecciones(String registroId, List<int> secciones) async {
+    try {
+      await _apiService.seleccionarSecciones(registroId, secciones);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> scanQR(String token) async {
+    try {
+      return await _apiService.scanQR(token);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getReporteEvento(int eventoId) async {
+    try {
+      return await _apiService.getReporte(eventoId);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ============================================================================
+  // MÉTODOS DE COMPATIBILIDAD
+  // ============================================================================
+  
+  Future<void> initDatabase() async {
+    // Intentar conectar con la API
+    try {
+      await _apiService.getEventos();
+      _useOfflineMode = false;
+    } catch (e) {
+      _useOfflineMode = true;
+      await cargarDatosPrueba();
+    }
   }
 
   Future<void> cargarDatosPrueba() async {
-    if (kIsWeb && _eventosMemoria.isEmpty) {
+    if (_eventosOffline.isEmpty) {
       final eventoPrueba = Evento(
         id: 1,
         nombre: 'Conferencia de Tecnología 2025',
-        descripcion: 'Conferencia sobre las últimas tendencias en tecnología y desarrollo de software.',
+        descripcion: 'Conferencia sobre las últimas tendencias en tecnología.',
         fecha: DateTime.now().add(const Duration(days: 7)),
         ubicacion: 'Auditorio Principal ISTS',
         organizador: 'Carrera de Desarrollo de Software',
@@ -405,8 +352,15 @@ class DatabaseService {
         activo: true,
       );
       
-      _eventosMemoria.add(eventoPrueba);
-      _nextEventoId = 2;
+      _eventosOffline.add(eventoPrueba);
     }
+  }
+
+  // Getter para saber si está en modo offline
+  bool get isOfflineMode => _useOfflineMode;
+  
+  // Método para forzar modo offline
+  void setOfflineMode(bool offline) {
+    _useOfflineMode = offline;
   }
 }
